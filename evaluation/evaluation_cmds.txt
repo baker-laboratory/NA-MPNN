@@ -1,0 +1,198 @@
+# Design Checkpoint Sweep on Validation Set
+SCRIPT=/home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh
+CSV=./evaluation_csvs/design_valid.csv
+OUT_BASE=./evaluation_outputs/design_valid
+MODEL_DIR=/home/akubaney/projects/na_mpnn/models/design_model
+
+# list of 6‑digit IDs (with leading zeros) for the output folders
+IDS=(
+  008036 009111 010050 011134 012040 013001 014126 015100
+  016067 017116 018047 019137 020066 021023 022113 023046
+  024132 025100 026030 027114 028031 029111 030009 040077
+  050105 060014 070059 080072 090082 100044
+)
+
+for ID in "${IDS[@]}"; do
+  # strip any leading zeros for the model filename
+  MODEL_ID=$((10#$ID))
+  sbatch --array=0-199 --time=00:20:00 "$SCRIPT" \
+    "$CSV" \
+    "$OUT_BASE/s_${ID}" \
+    "na_mpnn" \
+    10 \
+    0.1 \
+    "$MODEL_DIR/s_${MODEL_ID}.pt"
+done
+
+# Specificity Checkpoint Sweep on Validation Set
+
+SCRIPT_PRED=/home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/predict_specificities.sh
+SCRIPT_SCORE=/home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/score_native_specificities.sh
+CSV=./evaluation_csvs/specificity_valid.csv
+PRED_BASE=./evaluation_outputs/specificity_valid
+SCORE_BASE=./evaluation_outputs/specificity_valid_scores
+MODEL_DIR=/home/akubaney/projects/na_mpnn/models/specificity_model
+
+# six‑digit IDs (with leading zeros) matching your s_<ID> folders
+IDS=(
+  010103 020102 030020 040135 050013 051140 052130 053127
+  054111 055091 056066 057060 058049 059046 060060 061076
+  062074 063087 064067 065069 066046 067029 068019 069006
+  070114 080089 090042 100116
+)
+
+# loop #1: submit predict_specificities jobs
+for ID in "${IDS[@]}"; do
+  # drop leading zero(s) for the model filename
+  MODEL_ID=$((10#$ID))
+  sbatch --array=0-125 --time=00:20:00 "$SCRIPT_PRED" \
+    "$CSV" \
+    "$PRED_BASE/s_${ID}" \
+    "na_mpnn" \
+    10 \
+    0.5 \
+    "$MODEL_DIR/s_${MODEL_ID}.pt"
+done
+
+# loop #2: submit score_native_specificities jobs
+for ID in "${IDS[@]}"; do
+  sbatch --array=0-125 --time=00:20:00 "$SCRIPT_SCORE" \
+    "$CSV" \
+    "$PRED_BASE/s_${ID}" \
+    "$SCORE_BASE/s_${ID}"
+done
+
+# Specificity Temperature and Number of Samples Grid Search on Validation Set
+
+#!/usr/bin/env bash
+
+SCRIPT=/home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/predict_specificities.sh
+INPUT=./evaluation_csvs/specificity_valid.csv
+BASE_OUT=./evaluation_outputs/specificity_valid_hypersweep
+MODEL=/home/akubaney/projects/na_mpnn/models/specificity_model/s_70114.pt
+
+for n in 1 3 5 10 20 30; do
+  for t in 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2; do
+    # replace dot in t with underscore for directory name
+    tdir=${t//./_}
+    sbatch --array=0-125 --time=00:20:00 "$SCRIPT" \
+      "$INPUT" \
+      "$BASE_OUT/n_${n}__t_${tdir}" \
+      "na_mpnn" \
+      "$n" \
+      "$t" \
+      "$MODEL"
+  done
+done
+
+SCRIPT_SCORE=/home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/score_native_specificities.sh
+INPUT=./evaluation_csvs/specificity_valid.csv
+PRED_BASE=./evaluation_outputs/specificity_valid_hypersweep
+SCORE_BASE=./evaluation_outputs/specificity_valid_hypersweep_scores
+
+for n in 1 3 5 10 20 30; do
+  for t in 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2; do
+    tdir=${t//./_}
+    sbatch --array=0-125 --time=00:20:00 "$SCRIPT_SCORE" \
+      "$INPUT" \
+      "$PRED_BASE/n_${n}__t_${tdir}" \
+      "$SCORE_BASE/n_${n}__t_${tdir}"
+  done
+done
+
+# Design Test Set
+sbatch --array=0-199 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_test.csv \
+    ./evaluation_outputs/design_test/na_mpnn \
+    "na_mpnn" \
+    10
+
+# Design RNA Monomer Test Set
+sbatch --array=0-62 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_rna_monomer_test.csv \
+    ./evaluation_outputs/design_rna_monomer_test/na_mpnn \
+    "na_mpnn" \
+    10
+
+sbatch --array=0-62 --time=00:30:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_rna_monomer_test.csv \
+    ./evaluation_outputs/design_rna_monomer_test/grnade \
+    "grnade" \
+    10
+
+sbatch --array=0-62 --time=00:30:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_rna_monomer_test.csv \
+    ./evaluation_outputs/design_rna_monomer_test/rhodesign \
+    "rhodesign" \
+    10
+
+# Design Pseudoknot Test Set
+sbatch --array=0-32 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_pseudoknot_test.csv \
+    ./evaluation_outputs/design_pseudoknot_test/na_mpnn \
+    "na_mpnn" \
+    10
+
+sbatch --array=0-32 --time=00:30:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_pseudoknot_test.csv \
+    ./evaluation_outputs/design_pseudoknot_test/grnade \
+    "grnade" \
+    10
+
+sbatch --array=0-32 --time=00:30:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/design_sequences.sh \
+    ./evaluation_csvs/design_pseudoknot_test.csv \
+    ./evaluation_outputs/design_pseudoknot_test/rhodesign \
+    "rhodesign" \
+    10
+
+sh /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/process_natives.sh \
+    ./evaluation_csvs/design_pseudoknot_test.csv \
+    ./evaluation_outputs/design_pseudoknot_test_natives
+  
+sbatch --array=0-329 --time=00:10:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/process_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test/na_mpnn \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/na_mpnn
+
+sbatch --array=0-329 --time=00:10:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/process_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test/grnade \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/grnade
+  
+sbatch --array=0-329 --time=00:10:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/process_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test/rhodesign \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/rhodesign
+  
+sbatch --array=0-329 --time=00:05:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/score_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/na_mpnn \
+    ./evaluation_outputs/design_pseudoknot_test_natives/ \
+    ./evaluation_outputs/design_pseudoknot_test_scores/na_mpnn
+  
+sbatch --array=0-329 --time=00:05:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/score_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/grnade \
+    ./evaluation_outputs/design_pseudoknot_test_natives/ \
+    ./evaluation_outputs/design_pseudoknot_test_scores/grnade
+
+sbatch --array=0-329 --time=00:05:00 /home/akubaney/projects/na_mpnn/evaluation/rna_design_scripts/score_designs.sh \
+    ./evaluation_outputs/design_pseudoknot_test_processed_designs/rhodesign \
+    ./evaluation_outputs/design_pseudoknot_test_natives/ \
+    ./evaluation_outputs/design_pseudoknot_test_scores/rhodesign
+
+# Specificity Test Set
+sbatch --array=0-287 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/predict_specificities.sh \
+    ./evaluation_csvs/specificity_test.csv \
+    ./evaluation_outputs/specificity_test/na_mpnn \
+    "na_mpnn"
+
+sbatch --array=0-287 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/predict_specificities.sh \
+    ./evaluation_csvs/specificity_test.csv \
+    ./evaluation_outputs/specificity_test/deeppbs \
+    "deeppbs"
+
+sbatch --array=0-287 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/score_native_specificities.sh \
+    ./evaluation_csvs/specificity_test.csv \
+    ./evaluation_outputs/specificity_test/na_mpnn \
+    ./evaluation_outputs/specificity_test_scores/na_mpnn
+
+sbatch --array=0-287 --time=00:20:00 /home/akubaney/projects/na_mpnn/evaluation/protein_dna_specificity_scripts/score_native_specificities.sh \
+    ./evaluation_csvs/specificity_test.csv \
+    ./evaluation_outputs/specificity_test/deeppbs \
+    ./evaluation_outputs/specificity_test_scores/deeppbs
