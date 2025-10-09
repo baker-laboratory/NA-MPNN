@@ -141,5 +141,5 @@ python ./inference/run.py --help
 ```
 
 ## Splits
-The *splits* folder contains information about the structure and PPM IDs used
+The *splits* folder contains information about the structures and PPM IDs used
 for training and evaluation.
