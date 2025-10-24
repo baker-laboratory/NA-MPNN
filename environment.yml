@@ -1,0 +1,15 @@
+name: NA-MPNN
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - ipykernel
+  - openbabel
+  - ProDy
+  - pyarrow
+  - pandas
+  - pytorch
+  - pytorch-cuda
+  - cmake
+
