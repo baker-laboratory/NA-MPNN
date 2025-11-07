@@ -170,7 +170,7 @@ def main(args):
     else:
         print("Choose --model_type flag from currently available models")
         sys.exit()
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     if args.model_type == "na_mpnn":
         k_neighbors = 32
