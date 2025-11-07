@@ -2,6 +2,9 @@
 ## Introduction
 This repository holds the training and inference code for NA-MPNN. See below for installation and examples.
 
+**RNA sequence design and protein–DNA specificity prediction with NA-MPNN**
+https://www.biorxiv.org/content/10.1101/2025.10.03.679414v2
+
 ## Installation
 Installation of NA-MPNN should take between 10-30 minutes depending on your system and internet connection. The bulk of the time is spent setting up the conda environment. The inference code has been tested on Linux and Windows operating systems.
 
