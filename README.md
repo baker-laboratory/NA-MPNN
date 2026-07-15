@@ -55,7 +55,7 @@ cd NA-MPNN
 git clone https://github.com/soedinglab/pdbx.git ./pdbx
 
 # Build pdbx.
-cmake -S ./pdbx -B ./pdbx/build -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake -S ./pdbx -B ./pdbx/build -DCMAKE_POLICY_VERSION_MINIMUM="3.5"
 cmake --build ./pdbx/build
 ```
 Add pdbx to your python path:

@@ -410,10 +410,10 @@ class PDBDataset(torch.utils.data.Dataset):
 
         return ppms, ppm_paths_chosen
     
-    def calculate_information_content(self, ppm, eps = 1e-10):
+    def calculate_alignment_weight(self, ppm, eps = 1e-10):
         """
-        Calculate the per-position information content of a position probability
-        matrix (PPM).
+        Calculate the per-position alignment weight used for PPM alignment
+        scoring.
 
         Arguments:
             ppm (np.float64 np.ndarray): an L x 4 array of representing the PPM.
@@ -421,8 +421,8 @@ class PDBDataset(torch.utils.data.Dataset):
                 probability to prevent taking a logarithm of 0.
         
         Returns:
-            per_position_ic (np.float64 np.ndarray): the per-position
-                information content of the ppm.
+            per_position_alignment_weight (np.float64 np.ndarray): the
+                per-position alignment weight of the ppm.
         """
         # Check the shape of the ppm.
         assert(ppm.shape[-1] == 4)
@@ -431,10 +431,10 @@ class PDBDataset(torch.utils.data.Dataset):
         ppm_plus_eps = ppm + eps
         ppm_eps_norm = ppm_plus_eps / np.sum(ppm_plus_eps, axis = -1)[:, None]
 
-        # Compute the per-position information content.
-        per_position_ic = np.sum(np.log(ppm_eps_norm) / np.log(0.25), axis = -1)
+        # Compute the per-position alignment weight.
+        per_position_alignment_weight = np.sum(np.log(ppm_eps_norm) / np.log(0.25), axis = -1)
 
-        return per_position_ic
+        return per_position_alignment_weight
 
     def calculate_pearson_correlation_coeffcient(self, ppm, S_one_hot):
         """
@@ -477,9 +477,9 @@ class PDBDataset(torch.utils.data.Dataset):
 
     def calculate_alignment_score(self, ppm, S_one_hot):
         """
-        Calculate the per-position information content-weighted pearson
-        correlation coefficient between the ppm and the one-hot nucleic acid 
-        sequence, and return the sum.
+        Calculate the per-position pearson correlation coefficient between the
+        ppm and the one-hot nucleic acid sequence, weight each position by the
+        alignment weight, and return the sum.
 
         Arguments:
             ppm (np.float64 np.ndarray): an L x 4 array of representing the PPM.
@@ -487,29 +487,29 @@ class PDBDataset(torch.utils.data.Dataset):
                 one-hot nucleic acid sequence.
         
         Returns:
-            ic_weighted_pcc_sum (float): the sum of the per-position information 
-                content-weighted pearson correlation coefficient between 
-                the ppm and the one-hot DNA sequence.
+            alignment_weighted_pcc_sum (float): the sum of the per-position
+                pearson correlation coefficients after weighting by the
+                alignment weights.
         """
         # Check the shape of the ppm and the S_one_hot.
         assert(ppm.shape[-1] == 4)
         assert(S_one_hot.shape[-1] == 4)
 
-        # Calculate the per-position information content-weighted pearson
-        # correlation coefficient.
-        per_position_ic = self.calculate_information_content(ppm)
+        # Weight each per-position pearson correlation coefficient by the
+        # alignment weight.
+        per_position_alignment_weight = self.calculate_alignment_weight(ppm)
         per_position_pcc = self.calculate_pearson_correlation_coeffcient(ppm, S_one_hot)
-        per_position_ic_weighted_pcc = per_position_pcc * (0.5 * per_position_ic)
+        per_position_alignment_weighted_pcc = per_position_pcc * (0.5 * per_position_alignment_weight)
 
-        # Calculate the sum of the per_position_ic_weighted_pcc.
-        ic_weighted_pcc_sum = np.sum(per_position_ic_weighted_pcc)
+        # Calculate the sum of the per_position_alignment_weighted_pcc.
+        alignment_weighted_pcc_sum = np.sum(per_position_alignment_weighted_pcc)
 
-        return ic_weighted_pcc_sum
+        return alignment_weighted_pcc_sum
 
     def weighted_align(self, ppm, S_one_hot_na, S_non_x_mask):
         """
-        Given a ppm and a sequence, find the maximum information 
-        content-weighted pearson correlation coefficient alignment(s).
+        Given a ppm and a sequence, find the maximum alignment-weighted pearson
+        correlation coefficient alignment(s).
 
         Arguments:
             ppm (np.float64 np.ndarray): an L x 4 array of representing the PPM.
@@ -696,8 +696,8 @@ class PDBDataset(torch.utils.data.Dataset):
                         # If a ppm column has already been written to the
                         # specified sequence index in the aligned ppm, choose
                         # the ppm column with the higher score (if the DNA is
-                        # not DX at that position), and higher information
-                        # content otherwise.
+                        # not DX at that position), and higher alignment weight
+                        # otherwise.
                         if ppm_mask[S_idx] == 0:
                             aligned_ppm[S_idx, na_restype_ints_to_compare] = ppm[ppm_idx]
                             ppm_mask[S_idx] = 1
@@ -708,9 +708,9 @@ class PDBDataset(torch.utils.data.Dataset):
                                 if ppm_score > aligned_ppm_score:
                                     aligned_ppm[S_idx, na_restype_ints_to_compare] = ppm[ppm_idx]
                             else:
-                                ppm_col_ic = self.calculate_information_content(ppm[ppm_idx][None, :])
-                                aligned_ppm_col_ic = self.calculate_information_content(aligned_ppm[S_idx, na_restype_ints_to_compare][None, :])
-                                if ppm_col_ic > aligned_ppm_col_ic:
+                                ppm_col_alignment_weight = self.calculate_alignment_weight(ppm[ppm_idx][None, :])
+                                aligned_ppm_col_alignment_weight = self.calculate_alignment_weight(aligned_ppm[S_idx, na_restype_ints_to_compare][None, :])
+                                if ppm_col_alignment_weight > aligned_ppm_col_alignment_weight:
                                     aligned_ppm[S_idx, na_restype_ints_to_compare] = ppm[ppm_idx]
         
         return aligned_ppm, ppm_mask
